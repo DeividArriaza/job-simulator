@@ -5,7 +5,7 @@ const id = new URLSearchParams(window.location.search).get("id");
 document.getElementById("resource-label").textContent = window.RESOURCE;
 document.getElementById("edit-link").href = `edit.html?id=${id}`;
 
-const LABELS = ["Campo 1", "Campo 2", "Campo 3", "Campo 4", "Campo 5", "Campo 6"];
+const LABELS = ["Puesto", "Empresa", "Ubicación", "Salario", "Calificación", "Remoto"];
 const KEYS   = ["campo1", "campo2", "campo3", "campo4", "campo5", "campo6"];
 
 async function load() {
