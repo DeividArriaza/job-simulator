@@ -11,6 +11,11 @@ function addCorsHeaders(res) {
 }
 
 function sendJSON(res, statusCode, data) {
+  if (statusCode === 204) {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
   res.writeHead(statusCode, { "Content-Type": "application/json" });
   res.end(JSON.stringify(data));
 }
