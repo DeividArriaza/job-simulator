@@ -140,6 +140,47 @@ async function handleRequest(req, res, sendJSON) {
     return sendJSON(res, 200, result.rows[0]);
   }
 
+  // PATCH /jobs/:id
+  if (method === "PATCH" && id) {
+    let data;
+    try {
+      data = await parseBody(req);
+    } catch {
+      return sendJSON(res, 400, { error: "JSON inválido" });
+    }
+
+    const keys = Object.keys(data);
+    if (keys.length === 0) {
+      return sendJSON(res, 400, { error: "No se enviaron campos para actualizar" });
+    }
+
+    const errors = validate(data, true);
+    if (errors.length > 0) {
+      return sendJSON(res, 400, { error: errors.join(", ") });
+    }
+
+    const exists = await pool.query("SELECT id FROM jobs WHERE id = $1", [id]);
+    if (exists.rows.length === 0) {
+      return sendJSON(res, 404, { error: "Recurso no encontrado" });
+    }
+
+    const setClauses = [];
+    const values = [];
+    let i = 1;
+    for (const key of keys) {
+      setClauses.push(`${key}=$${i}`);
+      values.push(data[key]);
+      i++;
+    }
+    values.push(id);
+
+    const result = await pool.query(
+      `UPDATE jobs SET ${setClauses.join(", ")} WHERE id=$${i} RETURNING *`,
+      values
+    );
+    return sendJSON(res, 200, result.rows[0]);
+  }
+
   // DELETE /jobs/:id
   if (method === "DELETE" && id) {
     const result = await pool.query("DELETE FROM jobs WHERE id = $1 RETURNING *", [id]);
