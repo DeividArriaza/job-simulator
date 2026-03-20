@@ -1,43 +1,94 @@
 # Job Simulator — REST CRUD API
 
-## Descripción
-
-Se requiere construir una API REST con operaciones CRUD completas, persistencia en base de datos relacional y entorno containerizado. El dominio del recurso queda a criterio del desarrollador.
-
-El sistema será consumido por un cliente frontend ya existente. La API debe cumplir el contrato definido en este documento de forma exacta. Cualquier desviación del contrato se considera un fallo de integración.
+API REST con operaciones CRUD completas para gestionar ofertas de trabajo. Construida sin frameworks, utilizando únicamente el módulo nativo `http` de Node.js y PostgreSQL como base de datos relacional. Todo el sistema se levanta con un solo comando mediante Docker Compose.
 
 ---
 
-## Condiciones de trabajo
+## Tecnologías utilizadas
 
-Eres un desarrollador backend contratado para entregar un sistema funcional en un tiempo determinado. El pago se acredita únicamente si el sistema es entregado en tiempo y cumple el contrato en su totalidad.
-
-Las siguientes condiciones resultan en terminación del contrato sin compensación parcial:
-
-- El repositorio contiene archivos que no deben ser versionados (`node_modules`, `vendor`, `.env`, binarios, archivos de sistema operativo)
-
-- Entrega fuera del plazo establecido
-- El sistema no levanta con un único comando
-- Algún endpoint no responde o responde de forma incorrecta
-- Los códigos de respuesta HTTP no son los correctos según el estándar REST
-- Las validaciones no están implementadas
-- Los tipos de datos no son respetados
-- Las respuestas no son JSON
-- Almacenamiento en memoria en lugar de base de datos relacional
-- El API no interactua de forma correcta con el frontend.
-
-El nivel de contratación determina el máximo de compensación posible. No existe compensación parcial dentro de un nivel.
+| Tecnología | Uso |
+|---|---|
+| **Node.js 20** | Runtime del servidor, usando el módulo nativo `http` (sin Express ni frameworks) |
+| **PostgreSQL 16** | Base de datos relacional para persistencia |
+| **pg (node-postgres)** | Driver nativo para conectar Node.js con PostgreSQL |
+| **Docker** | Containerización de cada servicio |
+| **Docker Compose** | Orquestación de los contenedores (API + base de datos) |
 
 ---
 
-## Contrato de la API
+## Estructura del proyecto
 
-### Estructura del recurso
+```
+job-simulator/
+├── backend/
+│   ├── config/
+│   │   └── db.js              # Conexión a PostgreSQL y lógica de reintentos
+│   ├── routes/
+│   │   └── jobs.js            # Rutas CRUD, validaciones y queries SQL
+│   ├── server.js              # Punto de entrada: servidor HTTP y CORS
+│   ├── Dockerfile             # Imagen del backend (Node 20 Alpine)
+│   └── package.json           # Dependencias del proyecto
+├── frontend/                  # Cliente web pre-construido (HTML + JS + Tailwind)
+│   ├── public/
+│   │   ├── index.html         # Vista listado
+│   │   ├── create.html        # Formulario de creación
+│   │   ├── show.html          # Vista detalle
+│   │   ├── edit.html          # Formulario de edición
+│   │   └── js/
+│   │       ├── config.js      # URL de la API y nombre del recurso
+│   │       ├── api.js         # Cliente fetch para consumir la API
+│   │       ├── index.js       # Lógica de la vista listado
+│   │       ├── create.js      # Lógica del formulario de creación
+│   │       ├── show.js        # Lógica de la vista detalle
+│   │       └── edit.js        # Lógica del formulario de edición
+│   ├── Dockerfile             # Imagen del frontend (Nginx)
+│   └── nginx.conf             # Configuración del servidor web
+├── docker-compose.yml         # Orquestación de todos los servicios
+├── init.sql                   # Script de inicialización de la base de datos
+├── .env.example               # Plantilla de variables de entorno
+└── .gitignore                 # Archivos excluidos del repositorio
+```
 
-El recurso expone los siguientes campos con nombres fijos:
+---
+
+## Cómo funciona
+
+### Arquitectura
+
+El sistema se compone de dos servicios Docker independientes que se comunican entre sí a través de una red interna de Docker:
+
+1. **db** — Contenedor de PostgreSQL 16 que ejecuta el script `init.sql` automáticamente al primer arranque para crear la tabla y cargar datos de ejemplo.
+2. **api** — Contenedor de Node.js que expone la API REST en el puerto 8080. Espera a que PostgreSQL esté listo antes de aceptar conexiones (healthcheck + reintentos).
+
+### Servidor HTTP sin framework
+
+El servidor está construido directamente sobre `http.createServer()` de Node.js. El ruteo se implementa manualmente parseando la URL y el método HTTP de cada petición. No se utiliza Express, Fastify, Koa ni ningún otro framework.
+
+### CORS
+
+La API responde con headers `Access-Control-Allow-Origin: *` en todas las peticiones, y maneja las peticiones preflight `OPTIONS` que el navegador envía antes de peticiones con body (POST, PUT, PATCH).
+
+### Conexión a la base de datos
+
+El módulo `backend/config/db.js` crea un pool de conexiones usando las variables de entorno. Incluye una función de reintentos que intenta conectarse hasta 10 veces con intervalos de 2 segundos, ya que PostgreSQL tarda unos segundos en estar disponible dentro de Docker.
+
+### Validaciones
+
+Todos los campos son requeridos y se validan estrictamente por tipo:
+
+- `campo1`, `campo2`, `campo3` — deben ser `string`
+- `campo4` — debe ser `integer` (número entero)
+- `campo5` — debe ser `float` (número decimal)
+- `campo6` — debe ser `boolean`
+
+Las validaciones se aplican en POST y PUT (todos los campos obligatorios) y en PATCH (solo los campos enviados).
+
+---
+
+## Esquema del recurso
 
 | Campo  | Tipo    | Restricciones              |
-| ------ | ------- | -------------------------- |
+|--------|---------|----------------------------|
 | id     | integer | primary key, autoincrement |
 | campo1 | string  | requerido                  |
 | campo2 | string  | requerido                  |
@@ -46,126 +97,160 @@ El recurso expone los siguientes campos con nombres fijos:
 | campo5 | float   | requerido                  |
 | campo6 | boolean | requerido                  |
 
-El dominio es libre. Los nombres internos en base de datos y lógica de negocio quedan a criterio del desarrollador.
+### Dominio elegido
+
+El recurso representa **ofertas de trabajo**:
+
+| Campo  | Significado     |
+|--------|-----------------|
+| campo1 | Título del puesto |
+| campo2 | Empresa          |
+| campo3 | Ubicación        |
+| campo4 | Salario          |
+| campo5 | Calificación     |
+| campo6 | Remoto           |
 
 ---
 
-### Endpoints
+## Endpoints
 
-Se requiere implementar los métodos `GET`, `POST`, `PUT` y `DELETE`. El nombre del recurso en la ruta debe seguir las convenciones REST estándar.
+| Método | Ruta          | Descripción                  | Código éxito |
+|--------|---------------|------------------------------|--------------|
+| GET    | /jobs         | Listar todos los registros   | 200          |
+| GET    | /jobs/:id     | Obtener un registro por ID   | 200          |
+| POST   | /jobs         | Crear un nuevo registro      | 201          |
+| PUT    | /jobs/:id     | Actualizar registro completo | 200          |
+| PATCH  | /jobs/:id     | Actualización parcial        | 200          |
+| DELETE | /jobs/:id     | Eliminar un registro         | 204          |
 
----
+### Códigos de error
 
-### Validaciones
-
-Todos los campos son requeridos. Los tipos deben ser respetados estrictamente: `campo4` es entero, `campo5` es decimal, `campo6` es booleano.
-
----
-
-### Códigos de respuesta
-
-El uso correcto de códigos HTTP es parte del contrato con el cliente. Todas las respuestas son JSON.
-
----
-
-## Stack
-
-- Lenguaje: Javascript, PHP o Rust — no se aceptan Go ni Python
-- Base de datos: relacional, sin almacenamiento en memoria
-- Containerización: Docker obligatorio
-
-En la carpeta `resources/` se incluyen Dockerfiles de referencia para cada lenguaje y base de datos, y un `.env.example`.
+| Código | Significado                                    |
+|--------|------------------------------------------------|
+| 400    | JSON inválido, campos requeridos faltantes o tipos incorrectos |
+| 404    | Recurso no encontrado                          |
+| 405    | Método HTTP no permitido                       |
+| 500    | Error interno del servidor                     |
 
 ---
 
-## Niveles de contratación
+## Requisitos previos
 
-La evaluación es **pasa o no pasa**. Indicar el nivel seleccionado al momento de la entrega.
-
----
-
-### Nivel 1 — Junior `(máximo 70/100)`
-
-**Base de datos:** SQLite
-
-**Infraestructura:** `docker-compose.yml` con un único servicio. La base de datos corre embebida dentro del mismo contenedor que la aplicación. `docker-compose up` debe levantar el sistema completo y funcional sin intervención manual.
-
-**Requisitos:**
-- Los cinco endpoints funcionan correctamente contra la base de datos
-- Todas las validaciones están implementadas y retornan los códigos HTTP correspondientes
-- La base de datos persiste los datos correctamente entre operaciones
-- `Dockerfile` y `docker-compose.yml` presentes y funcionales
+- [Docker](https://www.docker.com/) instalado
+- [Docker Compose](https://docs.docker.com/compose/) disponible (incluido en Docker Desktop)
 
 ---
 
-### Nivel 2 — Mid `(máximo 85/100)`
+## Instalación y ejecución
 
-**Base de datos:** PostgreSQL
-
-**Infraestructura:** `docker-compose.yml` con dos servicios independientes: aplicación y base de datos. La aplicación debe conectarse a PostgreSQL usando variables de entorno. Un único `docker-compose up` levanta el sistema completo y funcional.
-
-**Requisitos adicionales al Nivel 1:**
-- Archivo `.env` con todas las variables de configuración necesarias
-- Sin credenciales, puertos ni strings de conexión hardcodeados en el código
-- La aplicación maneja correctamente los errores de conexión a la base de datos
-- El servicio de la aplicación no inicia hasta que PostgreSQL esté disponible
-
----
-
-### Nivel 3 — Senior `(máximo 100/100)`
-
-**Base de datos:** PostgreSQL
-
-**Infraestructura:** igual que Nivel 2.
-
-**Requisitos adicionales al Nivel 2:**
-- Endpoint `PATCH` para actualizaciones parciales: solo se modifican los campos presentes en el body, el resto permanece sin cambios
-- `.env.example` en el repositorio con todas las variables necesarias documentadas, sin valores reales
-- `.gitignore` que excluya `node_modules`, `.env`, y archivos de sistema operativo
-- Script SQL de inicialización de esquema ejecutado automáticamente por Docker al primer arranque
-- Estructura de proyecto con separación clara de responsabilidades: configuración de base de datos, definición de rutas y punto de entrada en archivos distintos
-- Historial de commits que refleje un proceso de desarrollo incremental — no se acepta un único commit con todo el trabajo
-
----
-
-## Bonus
-
-Los puntos bonus se suman sobre la nota del nivel entregado. Cada bonus se evalúa de forma independiente.
-
-### Integración full stack `(+10 puntos)`
-
-Integrar el frontend provisto en el mismo `docker-compose.yml` que la API.
-
-Condiciones:
-- Un único `docker-compose.yml` levanta ambos servicios
-- El frontend consume la API sin configuración manual posterior al `docker-compose up`
-- Ambos servicios operativos con un solo comando
-
-### Personalización del frontend `(+5 puntos)`
-
-Adaptar el frontend para que refleje el dominio elegido: etiquetas en el idioma correcto, nombres de campos legibles, y cualquier ajuste visual que mejore la experiencia del usuario final.
-
-Condiciones:
-- El frontend no debe mostrar `campo1`, `campo2`, etc. — deben verse los nombres reales del dominio
-- Los cambios deben ser coherentes con el recurso implementado en la API
-- Aplica únicamente si el bonus de integración también fue completado
-
----
-
-## Configuración del frontend
-
-El frontend provisto requiere dos valores en `public/js/config.js`:
-
-```js
-window.API_URL = "http://localhost:8080"; // URL base de tu API
-window.RESOURCE = "products";             // Nombre del recurso en tu API
+```bash
+git clone git@github.com:DeividArriaza/job-simulator.git
+cd job-simulator
+docker compose up --build
 ```
 
-`RESOURCE` debe coincidir exactamente con el nombre que usaste en las rutas de tu API.
+La API estará disponible en `http://localhost:8080` y la base de datos se inicializa automáticamente con 5 registros de ejemplo.
+
+Para detener los servicios:
+
+```bash
+docker compose down
+```
+
+Para eliminar también los datos persistidos:
+
+```bash
+docker compose down -v
+```
 
 ---
 
-## Entrega
+## Variables de entorno
 
-- Repositorio en GitHub con visibilidad pública
-- El sistema levanta con un único comando
+Las variables se configuran dentro del `docker-compose.yml`. El archivo `.env.example` documenta las variables necesarias:
+
+| Variable     | Descripción                      |
+|-------------|----------------------------------|
+| DB_HOST     | Host de la base de datos         |
+| DB_PORT     | Puerto de PostgreSQL             |
+| DB_NAME     | Nombre de la base de datos       |
+| DB_USER     | Usuario de PostgreSQL            |
+| DB_PASSWORD | Contraseña de PostgreSQL         |
+| APP_PORT    | Puerto interno de la aplicación  |
+
+---
+
+## Ejemplos de uso con curl
+
+### Crear un registro
+
+```bash
+curl -X POST http://localhost:8080/jobs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "campo1": "Desarrollador Backend",
+    "campo2": "TechCorp",
+    "campo3": "Ciudad de México",
+    "campo4": 45000,
+    "campo5": 4.5,
+    "campo6": true
+  }'
+```
+
+### Listar todos
+
+```bash
+curl http://localhost:8080/jobs
+```
+
+### Obtener uno
+
+```bash
+curl http://localhost:8080/jobs/1
+```
+
+### Actualizar completo
+
+```bash
+curl -X PUT http://localhost:8080/jobs/1 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "campo1": "Desarrollador Senior",
+    "campo2": "TechCorp",
+    "campo3": "Remoto",
+    "campo4": 70000,
+    "campo5": 4.9,
+    "campo6": true
+  }'
+```
+
+### Actualización parcial
+
+```bash
+curl -X PATCH http://localhost:8080/jobs/1 \
+  -H "Content-Type: application/json" \
+  -d '{"campo4": 80000}'
+```
+
+### Eliminar
+
+```bash
+curl -X DELETE http://localhost:8080/jobs/1
+```
+
+---
+
+## Nivel de entrega
+
+**Nivel 3 — Senior**
+
+Cumple con todos los requisitos:
+
+- CRUD completo con validaciones estrictas de tipos
+- PostgreSQL en contenedor separado con script de inicialización automático
+- Endpoint PATCH para actualizaciones parciales
+- Variables de entorno sin credenciales hardcodeadas en el código
+- `.env.example` documentado y `.gitignore` configurado
+- Estructura de proyecto con separación de responsabilidades (config, rutas, entrada)
+- Historial de commits incremental
+- Sistema completo levanta con `docker compose up --build`

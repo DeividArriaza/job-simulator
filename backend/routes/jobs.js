@@ -149,9 +149,11 @@ async function handleRequest(req, res, sendJSON) {
       return sendJSON(res, 400, { error: "JSON inválido" });
     }
 
-    const keys = Object.keys(data);
+    const allowedFields = ["campo1", "campo2", "campo3", "campo4", "campo5", "campo6"];
+    const keys = Object.keys(data).filter((k) => allowedFields.includes(k));
+
     if (keys.length === 0) {
-      return sendJSON(res, 400, { error: "No se enviaron campos para actualizar" });
+      return sendJSON(res, 400, { error: "No se enviaron campos válidos para actualizar" });
     }
 
     const errors = validate(data, true);
