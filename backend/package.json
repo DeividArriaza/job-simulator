@@ -1,0 +1,12 @@
+{
+  "name": "job-simulator-api",
+  "version": "1.0.0",
+  "description": "REST CRUD API for job listings",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "pg": "^8.13.1"
+  }
+}
